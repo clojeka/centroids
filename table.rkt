@@ -5,6 +5,47 @@
 (require racket/list)
 (require racket/string)
 
+(define-struct table (attrs classes tuples) #:transparent)
+;; examples
+;; (make-table '(x y class) '(black green) '((1.1 1.2 black) (0 0 green)))
+
+(define (table2-trivial-case-one)
+  (make-table '(x y class) '(black green)
+              '((0 1 black) (0 2 black) (0 3 black) (0 4 black)
+                (1 1 black) (1 2 black) (1 3 black) (1 4 black)
+                (3 1 green) (3 2 green) (3 3 green) (3 4 green)
+                (4 1 green) (4 2 green) (4 3 green) (4 4 green))))
+
+(define (table2-empty? table)
+  (empty? (table-tuples table)))
+
+(define (table2-filter-by-class c table)
+  (define (is-of-class-c? tuple)
+    (symbol=? c (last tuple)))
+  (make-table (table-attrs table) (table-classes table)
+              (filter is-of-class-c? (table-tuples table))))
+
+(define (table2-empty table)
+  (make-table (table-attrs table) (table-classes table) empty))
+
+(define (table2-class-of tuple)
+  (last tuple))
+
+(define (table2-pure? table)
+  (if (<= (length (table2-column-values (last (table-attrs table)) table)) 1)
+      true 
+      false))
+
+(define (table2-invert-selection table-selected table-source)
+  (define (not-in-selection? t)
+    (not (member t (table-tuples table-selected))))
+  (make-table (table-attrs table-source) 
+              (table-classes table-source)
+              (filter not-in-selection? (table-tuples table-source))))
+
+(define (table2-length table)
+  (length (table-tuples table)))
+
 (define (csv->table file)
   (let ([data (csv->list (make-csv-reader (open-input-file file)))])
     `((names ,(first data))
@@ -28,6 +69,10 @@
 
 (define (table-width table)
   (length (table->names table)))
+
+(define (table->classes table)
+  (let ([col (last (table->names table))])
+    (sort (column-values col table) symbol<?)))
 
 (define (table->csv table name [sep ","])
   ;; (define (print/out s)
@@ -141,6 +186,15 @@
 (define (column-values name table)
   (remove-duplicates (column-by-name name table)))
 
+(define (table2-column-values name table)
+  (remove-duplicates (table2-column-by-name name table)))
+
+(define (table2-column-by-name name table)
+  (let ((idx (index-of name (table-attrs table))))
+    (if (not idx) 
+        (error "column not found")
+        (column-get idx (table-tuples table)))))
+
 (define (column-by-name name table)
   (let ((idx (index-of name (table->names table))))
     (if (not idx) 
@@ -176,5 +230,8 @@
       ls
       (cons (if (zero? at-index) with-val (first ls))
             (substitute (rest ls) (sub1 at-index) with-val))))
+
+(define (list->values ls)
+  (apply values `(,@ls)))
 
 (provide (all-defined-out))

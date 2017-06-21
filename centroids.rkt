@@ -125,6 +125,11 @@
 (define (centroid-of-table table)
   (centroid-of-tuples (table->rows table)))
 
+(define (table2-centroid-of-table table)
+  (if (table2-empty? table) 
+      null 
+      (list->point (centroid-of-tuples (table-tuples table)))))
+
 ;; A Centroid is a point of the form '(x y) where x, y are rational
 ;; numbers.
 
@@ -218,5 +223,65 @@
          [c1 (first classes)]
          [c2 (if (= 1 (length classes)) c1 (second classes))])
     (centroid-tree-maker table c1 c2)))
+
+;;;;;;;;;;;;;;;;;;;
+;; the blob case
+
+(define-struct point (x y) #:transparent)
+
+(define (point->list p)
+  (list (point-x p) (point-y p)))
+
+(define (list->point ls)
+  (make-point (first ls) (second ls)))
+
+(define-struct stuff (sym point table blob) #:transparent)
+(define-struct blob (s1 s2) #:transparent)
+
+;; examples
+(define p1 (make-point 1.1 4.5))
+(define stuff1 false)
+(define stuff2 (make-stuff 'black (make-point 0 0) (table-empty (list "x" "y" "class")) false))
+(define stuff3 (make-stuff 'green (make-point 3 0) (table-empty (list "x" "y" "class")) false))
+(define blob1 false)
+(define blob2 (make-blob stuff2 false))
+(define blob3 (make-blob stuff2 stuff3))
+
+;; attracting points due to centroid gravity
+(define (table2-attract-to cen1 cen2 table)
+  ;; produces a table of tuples from TABLE which are closer to CEN1
+  ;; than to CEN2.  You cannot call this function if your TABLE is
+  ;; pure, that is, if it contains only tuples of a single class.
+  (let ([closer-to-cen1? 
+         (lambda (t) (< (distance (drop-last t) (point->list cen1)) 
+                         (distance (drop-last t) (point->list cen2))))])
+    (make-table 
+     (table-attrs table)
+     (table-classes table)
+     (filter closer-to-cen1? (table-tuples table)))))
+
+(define (stuff-for-pure-table table)
+  (make-stuff 
+   (table2-class-of (first (table-tuples table))) null null false))
+
+;; constructing a blob from a table
+(define (table->blob table)
+  (cond [(table2-empty? table) (make-blob false false)]
+        [(table2-pure? table) 
+         (make-blob (stuff-for-pure-table table) false)]
+        [else (let-values ([(c1 c2) (list->values (table-classes table))])
+                (let* ([table1 (table2-filter-by-class c1 table)]
+                       [table2 (table2-filter-by-class c2 table)]
+                       [cen1 (table2-centroid-of-table table1)]
+                       [cen2 (table2-centroid-of-table table2)]
+                       [with-cen1 (table2-attract-to cen1 cen2 table)]
+                       [with-cen2 (table2-invert-selection with-cen1 table)]
+                       [with-cen1-sum-c1 (table2-length (table2-filter-by-class c1 with-cen1))]
+                       [with-cen1-sum-c2 (table2-length (table2-filter-by-class c2 with-cen1))]
+                       [with-cen2-sum-c1 (table2-length (table2-filter-by-class c1 with-cen2))]
+                       [with-cen2-sum-c2 (table2-length (table2-filter-by-class c2 with-cen2))])
+                  (make-blob 
+                   (make-stuff c1 cen1 with-cen1 (table->blob with-cen1))
+                   (make-stuff c2 cen2 with-cen2 (table->blob with-cen2)))))]))
 
 (provide (all-defined-out))
