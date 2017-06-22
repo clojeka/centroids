@@ -46,6 +46,50 @@
 (define (table2-length table)
   (length (table-tuples table)))
 
+(define (table2-nth-tuple n table)
+  ;; Produces the N-th tuple of TABLE.
+  (list-ref (table-tuples table) (sub1 n)))
+
+(define (table->table2 table)
+  (make-table (table->names table)
+              (column-values (last (table->names table)) table)
+              (table->rows table)))
+
+(define (csv->table2 file)
+  (table->table2 (csv->table file)))
+
+(define (table2-insert-tuple t table)
+  (make-table (table-attrs table) 
+              (table-classes table)
+              (cons t (table-tuples table))))
+
+(define (table2-string-tuples table)
+  (make-table (table-attrs table)
+              (table-classes table)
+              (for/list ([t (table-tuples table)])
+                (append (map number->string (drop-last t))
+                        (list (symbol->string (last t)))))))
+
+(define (table2->csv table name [sep ","])
+  (table2-string-ready->csv (table2-string-tuples table) name sep))
+
+(define (table2-string-ready->csv table name sep)
+  ;; (define (print/out s)
+  ;;   (print (string-append s "\r\n")))
+  (with-output-to-file name #:exists 'replace 
+    (lambda ()
+      (printf "~a\r\n"(string-append (string-join (table-attrs table) sep)))
+      (for ([row (table-tuples table)])
+        (printf "~a\r\n" (string-join row sep))))))
+
+(define (table2-map f g table)
+  ;; Takes two functions F, G and maps F(tuple) G(class) onto the TABLE.
+  (make-table (table-attrs table) 
+              (map string->symbol (table-classes table))
+              (map (lambda (t) (append (map f (drop-last t)) (list (g (last t)))))
+                   (table-tuples table))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 (define (csv->table file)
   (let ([data (csv->list (make-csv-reader (open-input-file file)))])
     `((names ,(first data))

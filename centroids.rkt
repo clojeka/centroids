@@ -3,6 +3,9 @@
 (require racket/bool)
 (require racket/list)
 (require racket/local)
+;; (require (rename-in pict (table pict-table)))
+;; (require pict/tree-layout)
+(require racket/class)
 (require "table.rkt")
 
 ;; A class is a List-of symbol.  For example, (black blue) is a class
@@ -13,9 +16,6 @@
     (1 1 black) (1 2 black) (1 3 black) (1 4 black)
     (3 1 green) (3 2 green) (3 3 green) (3 4 green)
     (4 1 green) (4 2 green) (4 3 green) (4 4 green)))
-
-(define (drop-last ls)
-  (take ls (sub1 (length ls))))
 
 (define trivial-case-two trivial-case)
 (define trivial-case-one (map (lambda (p) (append p '(black))) (map drop-last trivial-case)))
@@ -52,6 +52,9 @@
   (require rackunit)
   (check-equal? (euclidean-distance '(0 0) '(0 0)) 0)
   (check-equal? (euclidean-distance '(1 1) '(2 2)) (sqrt 2)))
+
+(define (distance-tuple tuple point)
+  (distance (drop-last tuple) point))
 
 (define (distance t1 t2)
   (euclidean-distance t1 t2))
@@ -128,7 +131,7 @@
 (define (table2-centroid-of-table table)
   (if (table2-empty? table) 
       null 
-      (list->point (centroid-of-tuples (table-tuples table)))))
+      (centroid-of-tuples (table-tuples table))))
 
 ;; A Centroid is a point of the form '(x y) where x, y are rational
 ;; numbers.
@@ -224,25 +227,46 @@
          [c2 (if (= 1 (length classes)) c1 (second classes))])
     (centroid-tree-maker table c1 c2)))
 
+;; (define (centroid-tree->tree-layout ct [render render-node])
+;;   ;; Consumes a CentroidTree and produces its exact match as a
+;;   ;; TreeLayout --- so it can be rendered by drawing functions.
+;;   (cond [(empty? ct) false]
+;;         [else 
+;;          (let ([node (render (centroid-tree-node ct))])
+;;            (tree-layout #:pict node 
+;;                         (if (empty? (centroid-tree-left ct))
+;;                             false
+;;                             (tree-edge #:edge-width 2
+;;                                        (centroid-tree->tree-layout (centroid-tree-left ct) render)))
+;;                         (if (empty? (centroid-tree-left ct))
+;;                             false
+;;                             (tree-edge #:edge-width 2
+;;                                        (centroid-tree->tree-layout (centroid-tree-right ct) render)))))]))
+
+;; (define (render-node node)
+;;   (let* ([centroid (text (format "~a" (first node)) (cons 'bold "Helvetica") 16)]
+;;          [class (text (format "~a" (second node)) (cons 'bold "Helvetica") 16)])
+;;     (frame (vc-append 0 centroid class))))
+
+;; (define (table->tree-picture table [render render-node])
+;;   (naive-layered (centroid-tree->tree-layout (table->centroid-tree table) render)))
+
+;; (define (save-pict p name type)
+;;   (let ([bm (pict->bitmap p)])
+;;     (send bm save-file name type)))
+
 ;;;;;;;;;;;;;;;;;;;
 ;; the blob case
 
-(define-struct point (x y) #:transparent)
-
-(define (point->list p)
-  (list (point-x p) (point-y p)))
-
-(define (list->point ls)
-  (make-point (first ls) (second ls)))
-
-(define-struct stuff (sym point table blob) #:transparent)
+(define-struct stuff (sym centroid table blob) #:transparent)
 (define-struct blob (s1 s2) #:transparent)
+(define-struct stuff-thin (sym centroid blob) #:transparent)
 
 ;; examples
-(define p1 (make-point 1.1 4.5))
+(define p1 '(1.1 4.5))
 (define stuff1 false)
-(define stuff2 (make-stuff 'black (make-point 0 0) (table-empty (list "x" "y" "class")) false))
-(define stuff3 (make-stuff 'green (make-point 3 0) (table-empty (list "x" "y" "class")) false))
+(define stuff2 (make-stuff 'black '(0 0) (table-empty (list "x" "y" "class")) false))
+(define stuff3 (make-stuff 'green '(3 0) (table-empty (list "x" "y" "class")) false))
 (define blob1 false)
 (define blob2 (make-blob stuff2 false))
 (define blob3 (make-blob stuff2 stuff3))
@@ -253,22 +277,35 @@
   ;; than to CEN2.  You cannot call this function if your TABLE is
   ;; pure, that is, if it contains only tuples of a single class.
   (let ([closer-to-cen1? 
-         (lambda (t) (< (distance (drop-last t) (point->list cen1)) 
-                         (distance (drop-last t) (point->list cen2))))])
+         (lambda (t) (<= (distance (drop-last t) cen1) 
+                         (distance (drop-last t) cen2)))])
     (make-table 
      (table-attrs table)
      (table-classes table)
      (filter closer-to-cen1? (table-tuples table)))))
 
-(define (stuff-for-pure-table table)
-  (make-stuff 
-   (table2-class-of (first (table-tuples table))) null null false))
+;; (define (stuff-for-pure-table table)
+;;   (make-stuff 
+;;    (table2-class-of (first (table-tuples table))) null null false))
 
 ;; constructing a blob from a table
+;; (define (table-consistent table)
+;;   (let-values ([(c1 c2) (list->values (table-classes table))])
+;;     (for/fold ([clean (table2-empty table)])
+;;               ([tuple (in-list (table-tuples table))]
+;;                #:unless (or (member (append (drop-last tuple) (list c1)) (table-tuples clean))
+;;                             (member (append (drop-last tuple) (list c2)) (table-tuples clean))))
+;;     (table2-insert-tuple tuple clean))))
+
+;; (define (table->blob table)
+;;   (consistent-table->blob (table-consistent table)))
+
+;; (define (consistent-table? table)
+;;   (= (table2-length table) (table2-length (table-consistent table))))
+
 (define (table->blob table)
-  (cond [(table2-empty? table) (make-blob false false)]
-        [(table2-pure? table) 
-         (make-blob (stuff-for-pure-table table) false)]
+  (cond [(or (table2-empty? table) (table2-pure? table)) 
+         (make-blob false false)]
         [else (let-values ([(c1 c2) (list->values (table-classes table))])
                 (let* ([table1 (table2-filter-by-class c1 table)]
                        [table2 (table2-filter-by-class c2 table)]
@@ -276,12 +313,67 @@
                        [cen2 (table2-centroid-of-table table2)]
                        [with-cen1 (table2-attract-to cen1 cen2 table)]
                        [with-cen2 (table2-invert-selection with-cen1 table)]
-                       [with-cen1-sum-c1 (table2-length (table2-filter-by-class c1 with-cen1))]
-                       [with-cen1-sum-c2 (table2-length (table2-filter-by-class c2 with-cen1))]
-                       [with-cen2-sum-c1 (table2-length (table2-filter-by-class c1 with-cen2))]
-                       [with-cen2-sum-c2 (table2-length (table2-filter-by-class c2 with-cen2))])
-                  (make-blob 
-                   (make-stuff c1 cen1 with-cen1 (table->blob with-cen1))
-                   (make-stuff c2 cen2 with-cen2 (table->blob with-cen2)))))]))
+                       #;[with-cen1-sum-c1 (table2-length (table2-filter-by-class c1 with-cen1))]
+                       #;[with-cen1-sum-c2 (table2-length (table2-filter-by-class c2 with-cen1))]
+                       #;[with-cen2-sum-c1 (table2-length (table2-filter-by-class c1 with-cen2))]
+                       #;[with-cen2-sum-c2 (table2-length (table2-filter-by-class c2 with-cen2))])
+                  (if (= 0 (distance cen1 cen2)) 
+                      (make-blob false false) ; another base case
+                      (make-blob ; recursive case
+                       (make-stuff-thin c1 cen1 #;with-cen1 (table->blob with-cen1))
+                       (make-stuff-thin c2 cen2 #;with-cen2 (table->blob with-cen2))))))]))
+
+(define (blob-empty? b) 
+  (and (not (blob-s1 b)) (not (blob-s2 b))))
+
+;;;;;;;;;;;;;;;;
+;; classifier pure class
+;;;;;;;;
+(define (classifier-last-class b tuple [last-class 'not-a-good-blob])
+  (if (blob-empty? b) 
+      last-class
+      (let* ([stuff1 (blob-s1 b)]
+             [stuff2 (blob-s2 b)]
+             [cen1 (stuff-centroid stuff1)]
+             [cen2 (stuff-centroid stuff2)]
+             [blob1 (stuff-blob stuff1)]
+             [blob2 (stuff-blob stuff2)])
+        (if (<= (distance-tuple tuple cen1) (distance-tuple tuple cen2))
+            (classifier-last-class blob1 tuple (stuff-sym stuff1))
+            (classifier-last-class blob2 tuple (stuff-sym stuff2))))))
+
+(define (test-classifier-last-class b table)
+  (for/list ([t (in-list (table-tuples table))])
+    (list t (classifier-last-class b t))))
+
+(define (classifier-last-class-thin b tuple [last-class 'not-a-good-blob])
+  (if (blob-empty? b) 
+      last-class
+      (let* ([stuff1 (blob-s1 b)]
+             [stuff2 (blob-s2 b)]
+             [cen1 (stuff-thin-centroid stuff1)]
+             [cen2 (stuff-thin-centroid stuff2)]
+             [blob1 (stuff-thin-blob stuff1)]
+             [blob2 (stuff-thin-blob stuff2)])
+        (if (<= (distance-tuple tuple cen1) (distance-tuple tuple cen2))
+            (classifier-last-class-thin blob1 tuple (stuff-thin-sym stuff1))
+            (classifier-last-class-thin blob2 tuple (stuff-thin-sym stuff2))))))
+
+(define (test-classifier-last-class-thin b table)
+  (for/list ([t (in-list (table-tuples table))])
+    (list t (classifier-last-class-thin b t))))
 
 (provide (all-defined-out))
+
+;;;;
+
+;; (define (classifier H tuple [last-class 'H-no-good])
+;;   (cond 
+;;     [(null? H) last-class]
+;;     [(< (distance tuple (CENTROID YES)) 
+;;         (distance tuple (CENTROIS NO))) 
+;;      (classifier (H YES) tuple 'YES)]
+;;     [(> (distance tuple (CENTROID YES)) 
+;;         (distance tuple (CENTROID NO)))
+;;      (classifier (H NO) tuple 'NO)]
+;;     [else last-class]))
