@@ -31,13 +31,13 @@
       (append ls (test-classifier-last-class-thin (csv->blob csv-train) test-table)))))
 
 (define (correct? r)
-  (symbol=? (last (car r)) (second r)))
+  (equal? (last (car r)) (second r)))
 
 (define (incorrect? r)
   (not (correct? r)))
 
 (define (yes? r)
-  (symbol=? (last (car r)) (second r)))
+  (equal? (last (car r)) (second r)))
 
 (define (not? r)
   (not (yes? r)))
@@ -49,22 +49,22 @@
 ;;            [test-table (table->table2 (table->binary-table (csv->table csv-test)))])
 ;;       (test-classifier-last-class-thin (csv->blob csv-train) test-table))))
 
-(define (results-k-fold dir)
+(define (results-k-fold dir [tester test-classifier-last-class-thin])
   (for/fold ([ls empty]) ([i (in-range 1 11)])
     (let* ([csv-train (string-append "bases/" dir "/train" (number->string i) ".csv")]
            [csv-test (string-append  "bases/" dir "/test" (number->string i) ".csv")]
            [test-table (table->table2 (table->binary-table (csv->table csv-test)))])
-      (append ls (test-classifier-last-class-thin (csv->blob csv-train) test-table)))))
+      (append ls (tester (csv->blob csv-train) test-table)))))
 
 (define (filter-results-by-class c results)
   (let ([is-it-of-class-c? (λ (r) (symbol=? c (last (car r))))])
     (filter is-it-of-class-c? results)))
 
-(define (confusion dir)
+(define (confusion dir [tester test-classifier-last-class-thin])
   (let ([classes (table->table2 
                      (table->binary-table 
                       (csv->table (string-append  "bases/" dir "/test1.csv"))))]
-        [results (results-k-fold dir)])
+        [results (results-k-fold dir tester)])
     (let ([yes-results (filter-results-by-class 'yes results)]
           [not-results (filter-results-by-class 'not results)])
       (list (list (for/sum ([r (in-list yes-results)]) (if (yes? r) 1 0))
@@ -100,9 +100,15 @@
              #:when (not (symbol=? (last (car r)) (second r))))
     (list (car r) (second r))))
 
-(define (all)
+(define (all-last-class)
   (time (for/list ([name (in-list (all-bases))])
           (let ([cm (confusion (symbol->string name))])
+            (list name 'matrix cm
+                  'accuracy (accuracy cm))))))
+
+(define (all-sum)
+  (time (for/list ([name (in-list (all-bases))])
+          (let ([cm (confusion (symbol->string name) test-classifier-sum)])
             (list name 'matrix cm
                   'accuracy (accuracy cm))))))
 
@@ -116,7 +122,7 @@
     glass
     blood
     breast-cancer
-    ;; magic04
+    magic04
     parkinson
-    ;; spam
+    spam
     ))

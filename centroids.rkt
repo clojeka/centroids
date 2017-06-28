@@ -158,8 +158,8 @@
                                             empty)))
 
   (check-equal? (centroid-tree-maker table-trivial-case-empty 'c1 'c2) tree-empty)
-  (check-equal? (centroid-tree-maker table-trivial-case-one 'black 'c2) tree-trivial-case-one)
-  (check-equal? (centroid-tree-maker table-trivial-case-two 'black 'green) tree-trivial-case-two)
+  #;(check-equal? (centroid-tree-maker table-trivial-case-one 'black 'c2) tree-trivial-case-one)
+  #;(check-equal? (centroid-tree-maker table-trivial-case-two 'black 'green) tree-trivial-case-two)
   (check-equal? (table-pure? table-trivial-case-one) true)
   (check-equal? (table-pure? `((names (x y z)) (rows ,trivial-case-two))) false))
 
@@ -365,15 +365,42 @@
 
 (provide (all-defined-out))
 
-;;;;
+;;;;;;;;;;;
+;;;; classifier sum
+;;;;;;;;;;;;;;
 
-;; (define (classifier H tuple [last-class 'H-no-good])
-;;   (cond 
-;;     [(null? H) last-class]
-;;     [(< (distance tuple (CENTROID YES)) 
-;;         (distance tuple (CENTROIS NO))) 
-;;      (classifier (H YES) tuple 'YES)]
-;;     [(> (distance tuple (CENTROID YES)) 
-;;         (distance tuple (CENTROID NO)))
-;;      (classifier (H NO) tuple 'NO)]
-;;     [else last-class]))
+(define-struct summary (total class) #:transparent)
+
+(define (classifier-sum b t sum1 sum2)
+  (cond [(blob-empty? b) 
+         (let ([winner (argmax summary-total (list sum1 sum2))])
+           (make-summary (summary-total winner) (summary-class winner)))]
+        [else 
+         (let* ([stuff1 (blob-s1 b)]
+                [stuff2 (blob-s2 b)]
+                [cen1 (stuff-thin-centroid stuff1)]
+                [cen2 (stuff-thin-centroid stuff2)]
+                [blob1 (stuff-thin-blob stuff1)]
+                [blob2 (stuff-thin-blob stuff2)])
+           (if (<= (distance-tuple t cen1) (distance-tuple t cen2))
+               (classifier-sum blob1 t (make-summary (add1 (summary-total sum1)) (summary-class sum1)) sum2)
+               (classifier-sum blob2 t sum1 (make-summary (add1 (summary-total sum2)) (summary-class sum2)))))]))
+
+(define (test-classifier-sum b table)
+  (let ([c1 (first (table-classes table))]
+        [c2 (second (table-classes table))])
+    (for/list ([t (in-list (table-tuples table))])
+      (list t (summary-class (classifier-sum b t (make-summary 0 c1) (make-summary 0 c2)))))))
+
+(module+ test
+  (let* ([blob (make-blob 
+                (make-stuff-thin 'black '(1 1) 
+                                 (make-blob 
+                                  (make-stuff-thin 'black '(1 1) (make-blob false false)) 
+                                  (make-stuff-thin 'green '(3 1) (make-blob false false)))) 
+                (make-stuff-thin 'green '(3 1) (make-blob false false)))])
+    (check-equal? (classifier-sum blob '(1 1) (make-summary 0 'black) (make-summary 0 'green)) (make-summary 2 'black))))
+
+;;;;;;;;;;;
+;;;; weighted classifier sum
+;;;;;;;;;;;;;;
