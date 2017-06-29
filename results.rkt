@@ -112,6 +112,13 @@
             (list name 'matrix cm
                   'accuracy (accuracy cm))))))
 
+(define (all-heights)
+  (time 
+   (for/list 
+       ([name (in-list (all-bases))])
+     (let ([filename (string-append "bases/" (symbol->string name) "/" (symbol->string name) ".csv")])
+       (list name 'height (blob-height (csv->blob filename)))))))
+
 (define (all-bases)
   '(iris-setosa-or-not 
     iris-versicolor-or-not 

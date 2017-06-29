@@ -399,8 +399,13 @@
                                   (make-stuff-thin 'black '(1 1) (make-blob false false)) 
                                   (make-stuff-thin 'green '(3 1) (make-blob false false)))) 
                 (make-stuff-thin 'green '(3 1) (make-blob false false)))])
-    (check-equal? (classifier-sum blob '(1 1) (make-summary 0 'black) (make-summary 0 'green)) (make-summary 2 'black))))
+    (check-equal? (classifier-sum blob '(1 1) (make-summary 0 'black) (make-summary 0 'green)) (make-summary 2 'black))
+    (check-equal? (blob-height blob) 2)))
 
 ;;;;;;;;;;;
-;;;; weighted classifier sum
+;;;; blob height
 ;;;;;;;;;;;;;;
+(define (blob-height b)
+  (cond [(blob-empty? b) 0]
+        [else (max (add1 (blob-height (stuff-thin-blob (blob-s1 b)))) 
+                   (add1 (blob-height (stuff-thin-blob (blob-s2 b)))))]))
